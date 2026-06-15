@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      client_id:
+        description: 'GreenNode IAM Client ID (để trống = dùng secret)'
+        required: false
+        default: ''
+      client_secret:
+        description: 'GreenNode IAM Client Secret (để trống = dùng secret)'
+        required: false
+        default: ''
 
 env:
   RUNTIME_NAME: csat-zalopay-agent
@@ -18,34 +27,45 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check connectivity & secrets
-        run: |
-          echo "Checking IAM endpoint reachability..."
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$IAM_TOKEN_URL" || echo "TIMEOUT")
-          echo "IAM endpoint probe: $HTTP"
-          echo "Client ID length: ${#GREENNODE_CLIENT_ID}"
-          echo "Client Secret length: ${#GREENNODE_CLIENT_SECRET}"
+      - name: Resolve credentials
         env:
-          GREENNODE_CLIENT_ID: ${{ secrets.GREENNODE_CLIENT_ID }}
-          GREENNODE_CLIENT_SECRET: ${{ secrets.GREENNODE_CLIENT_SECRET }}
+          INPUT_CLIENT_ID: ${{ github.event.inputs.client_id }}
+          INPUT_CLIENT_SECRET: ${{ github.event.inputs.client_secret }}
+          SECRET_CLIENT_ID: ${{ secrets.GREENNODE_CLIENT_ID }}
+          SECRET_CLIENT_SECRET: ${{ secrets.GREENNODE_CLIENT_SECRET }}
+        run: |
+          CLIENT_ID="${INPUT_CLIENT_ID:-$SECRET_CLIENT_ID}"
+          CLIENT_SECRET="${INPUT_CLIENT_SECRET:-$SECRET_CLIENT_SECRET}"
+          echo "::add-mask::$CLIENT_SECRET"
+          echo "Client ID length: ${#CLIENT_ID}"
+          echo "Client Secret length: ${#CLIENT_SECRET}"
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+            echo "ERROR: IAM credentials not found. Provide via workflow inputs or GitHub Secrets."
+            exit 1
+          fi
+          echo "GN_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "GN_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
 
       - name: Get IAM Token
         id: iam
         run: |
           RAW=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 15 \
             -X POST "$IAM_TOKEN_URL" \
-            -u "${{ secrets.GREENNODE_CLIENT_ID }}:${{ secrets.GREENNODE_CLIENT_SECRET }}" \
+            -u "$GN_CLIENT_ID:$GN_CLIENT_SECRET" \
             -d "grant_type=client_credentials" \
             -H "Content-Type: application/x-www-form-urlencoded")
           HTTP_STATUS=$(echo "$RAW" | grep "HTTP_STATUS:" | cut -d: -f2)
           BODY=$(echo "$RAW" | sed '/HTTP_STATUS:/d')
           echo "IAM HTTP status: $HTTP_STATUS"
-          ERR=$(echo "$BODY" | jq -r '.errors[0].code // empty' 2>/dev/null || echo "parse-error")
+          ERR=$(echo "$BODY" | jq -r '.errors[0].code // empty' 2>/dev/null || echo "")
           MSG=$(echo "$BODY" | jq -r '.errors[0].message // empty' 2>/dev/null || echo "")
-          [ -n "$ERR" ] && echo "IAM error: $ERR - $MSG"
+          if [ -n "$ERR" ]; then
+            echo "IAM error: $ERR - $MSG"
+          fi
           TOKEN=$(echo "$BODY" | jq -r '.access_token // empty')
           if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "ERROR: Failed to get IAM token (HTTP $HTTP_STATUS, error: $ERR)"
+            echo "ERROR: Failed to get IAM token (HTTP $HTTP_STATUS)"
+            echo "Response: $BODY"
             exit 1
           fi
           echo "::add-mask::$TOKEN"
@@ -190,7 +210,6 @@ jobs:
           echo "Deployed runtime: $RUNTIME_ID"
 
       - name: Wait for ACTIVE status
-        id: wait
         run: |
           RUNTIME_ID="${{ steps.deploy.outputs.runtime_id }}"
           for i in $(seq 1 20); do
@@ -200,10 +219,9 @@ jobs:
               | jq -r '.status // .data.status')
             echo "Attempt $i/20: status=$STATUS"
             if [ "$STATUS" = "ACTIVE" ]; then
-              echo "status=ACTIVE" >> $GITHUB_OUTPUT
               break
             elif [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "FAILED" ]; then
-              echo "Runtime failed with status: $STATUS"
+              echo "Runtime failed: $STATUS"
               exit 1
             fi
             sleep 15
