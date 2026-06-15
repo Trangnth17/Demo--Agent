@@ -147,7 +147,7 @@ jobs:
           RESP=$(curl -s -H "Authorization: Bearer ${{ steps.iam.outputs.token }}" \
             "$AGENTBASE_RUNTIME_URL/flavors")
           FLAVOR=$(echo "$RESP" | jq -r \
-            '.listData[]? | select(.supportedResourceTypes[]? == "agent-runtime") | .id' \
+            '(if type=="array" then .[] else .listData[]? end) | select(.supportedResourceTypes[]? == "agent-runtime") | .id' \
             | head -1)
           echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
           echo "Using flavor: $FLAVOR"
