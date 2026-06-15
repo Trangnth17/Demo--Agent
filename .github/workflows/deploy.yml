@@ -118,15 +118,12 @@ jobs:
           CREDS=$(curl -s -H "Authorization: Bearer ${{ steps.iam.outputs.token }}" \
             "$AGENTBASE_CR_URL/registry-credential")
           CR_USER=$(echo "$CREDS" | jq -r '.username')
-          CR_PASS=$(echo "$CREDS" | jq -r '.password // .secret // .secretKey')
+          CR_PASS=$(echo "$CREDS" | jq -r '.secret // .password // .secretKey')
           echo "::add-mask::$CR_PASS"
-          AUTH=$(echo -n "$CR_USER:$CR_PASS" | base64 -w0)
-          echo "::add-mask::$AUTH"
           IMAGE_AUTH=$(jq -n \
-            --arg reg "${{ steps.cr.outputs.registry_url }}" \
             --arg user "$CR_USER" \
-            --arg auth "$AUTH" \
-            '{"registryUrl":$reg,"username":$user,"auth":$auth}')
+            --arg pass "$CR_PASS" \
+            '{"enabled": true, "username": $user, "password": $pass}')
           echo "imageauth=$(echo $IMAGE_AUTH | base64 -w0)" >> $GITHUB_OUTPUT
 
       - name: Check existing runtime
@@ -150,13 +147,8 @@ jobs:
           RESP=$(curl -s -H "Authorization: Bearer ${{ steps.iam.outputs.token }}" \
             "$AGENTBASE_RUNTIME_URL/flavors")
           FLAVOR=$(echo "$RESP" | jq -r \
-            '.listData[]? | select(.supportedResourceTypes[]? == "agent-runtime") | .name' \
-            | grep "1x1" | head -1)
-          if [ -z "$FLAVOR" ]; then
-            FLAVOR=$(echo "$RESP" | jq -r \
-              '.listData[]? | select(.supportedResourceTypes[]? == "agent-runtime") | .name' \
-              | head -1)
-          fi
+            '.listData[]? | select(.supportedResourceTypes[]? == "agent-runtime") | .id' \
+            | head -1)
           echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
           echo "Using flavor: $FLAVOR"
 
@@ -168,20 +160,24 @@ jobs:
           PAYLOAD=$(jq -n \
             --arg name "${{ env.RUNTIME_NAME }}" \
             --arg image "$FULL_IMAGE" \
-            --arg flavor "${{ steps.flavor.outputs.flavor }}" \
+            --arg flavorId "${{ steps.flavor.outputs.flavor }}" \
+            --arg apiKey "${{ secrets.GREENNODE_API_KEY }}" \
             --argjson imageAuth "$IMAGE_AUTH" \
             '{
               "name": $name,
+              "description": $name,
               "imageUrl": $image,
-              "flavorName": $flavor,
-              "minReplicas": 1,
-              "maxReplicas": 1,
-              "cpuScaleThreshold": 50,
-              "memScaleThreshold": 50,
-              "imageAuth": $imageAuth,
-              "envVars": [
-                {"name": "GREENNODE_API_KEY", "value": "${{ secrets.GREENNODE_API_KEY }}"}
-              ]
+              "flavorId": $flavorId,
+              "command": [],
+              "args": [],
+              "environmentVariables": {"GREENNODE_API_KEY": $apiKey},
+              "autoscaling": {
+                "minReplicas": 1,
+                "maxReplicas": 1,
+                "cpuUtilization": 50,
+                "memoryUtilization": 50
+              },
+              "imageAuth": $imageAuth
             }')
 
           RUNTIME_ID="${{ steps.runtime_check.outputs.runtime_id }}"
