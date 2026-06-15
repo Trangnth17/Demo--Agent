@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  csat-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./data:/app/data
+    environment:
+      - GREENNODE_API_KEY=${GREENNODE_API_KEY}
+    restart: unless-stopped

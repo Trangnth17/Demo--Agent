@@ -1,0 +1,11 @@
+.env
+.greennode.json
+.agentbase/
+.agentbase-state.json
+__pycache__/
+*.pyc
+*.pyo
+.git/
+uploads/
+output/
+.claude/

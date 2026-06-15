@@ -1,0 +1,50 @@
+[
+  {
+    "text": "tôi nộp tiền điện mà không về, mất mấy ngày rồi vẫn chưa thấy",
+    "label": "Chuyển khoản lỗi",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "app tự nhiên trừ tiền của tôi mà không báo gì hết, ai cho phép vậy",
+    "label": "Tự động trừ",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "chatbot trả lời vòng vo không giải quyết được vấn đề gì, cứ gợi ý mãi không đúng",
+    "label": "Bot không giải quyết",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "tôi muốn hoàn tiền vé phim đã mua nhưng không hủy được trong app",
+    "label": "Hoàn tiền",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "gọi tổng đài mãi không có người nghe máy, đợi 30 phút không ai bắt máy",
+    "label": "Khó kết nối NV",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "ekyc mãi không được căn cước của tôi chuẩn rồi mà vẫn lỗi",
+    "label": "Xác thực",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "voucher không dùng được dù chưa hết hạn, bấm vào báo lỗi",
+    "label": "Ưu đãi",
+    "source": "seed",
+    "date": "2025-01-01"
+  },
+  {
+    "text": "tài khoản bị khóa không biết làm sao, đăng nhập không được",
+    "label": "Bảo mật",
+    "source": "seed",
+    "date": "2025-01-01"
+  }
+]

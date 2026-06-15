@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CSAT Chatbot Analysis Agent</title>
+<style>
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #273549;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f97316;
+  --yellow: #eab308;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  padding: 0 0 4rem;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1rem 2rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-logo { font-size: 1.25rem; font-weight: 800; color: #fff; }
+.topbar-logo span { color: var(--accent); }
+.topbar-sub { font-size: .75rem; color: var(--muted); }
+.topbar-spacer { flex: 1; }
+.topbar-version {
+  font-size: .7rem; color: var(--muted);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 999px; padding: .2rem .65rem;
+}
+
+/* ── Layout ── */
+.main { max-width: 1080px; margin: 0 auto; padding: 2rem; }
+
+/* ── Upload section ── */
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.dropzone {
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: 1rem;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--accent);
+  background: #6366f108;
+}
+.dropzone.has-file {
+  border-color: var(--green);
+  border-style: solid;
+  background: #22c55e08;
+}
+.dropzone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.dropzone-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+.dropzone-label { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
+.dropzone-hint { font-size: .8rem; color: var(--muted); }
+.dropzone-badge {
+  display: inline-block;
+  font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  padding: .15rem .5rem; border-radius: 999px; margin-bottom: .625rem;
+}
+.badge-required { background: #ef444422; color: #ef4444; border: 1px solid #ef444444; }
+.badge-optional  { background: #6366f122; color: #818cf8; border: 1px solid #6366f144; }
+.file-name {
+  margin-top: .75rem; font-size: .8rem; color: var(--green);
+  font-weight: 600; display: none;
+}
+.file-name.visible { display: block; }
+
+/* ── Run button ── */
+.run-row { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; }
+.btn-run {
+  display: flex; align-items: center; gap: .625rem;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: .75rem;
+  padding: .875rem 2rem; font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: background .2s, transform .1s;
+}
+.btn-run:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+.btn-run:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.btn-run .spinner {
+  width: 1rem; height: 1rem; border: 2px solid #ffffff44;
+  border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
+  display: none;
+}
+.btn-run.loading .spinner { display: block; }
+.btn-run.loading .btn-label { opacity: .7; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Progress ── */
+.progress-section { display: none; }
+.progress-section.visible { display: block; }
+
+.steps-bar {
+  display: flex; gap: .5rem; margin-bottom: 1.5rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 1rem; padding: 1rem 1.5rem;
+  overflow-x: auto;
+}
+.step {
+  display: flex; flex-direction: column; align-items: center; gap: .375rem;
+  flex: 1; min-width: 64px;
+}
+.step-circle {
+  width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .875rem; font-weight: 700;
+  background: var(--surface2); border: 2px solid var(--border);
+  color: var(--muted); transition: all .3s;
+}
+.step.running .step-circle { border-color: var(--accent); color: var(--accent); animation: pulse 1.5s infinite; }
+.step.done    .step-circle { background: var(--green); border-color: var(--green); color: #fff; }
+.step.error   .step-circle { background: var(--red); border-color: var(--red); color: #fff; }
+.step.skipped .step-circle { opacity: .35; }
+.step-label { font-size: .7rem; color: var(--muted); text-align: center; }
+.step.done .step-label { color: var(--green); }
+.step.running .step-label { color: var(--accent); }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #6366f144; } 50% { box-shadow: 0 0 0 6px #6366f100; } }
+
+.log-box {
+  background: #0a1628; border: 1px solid var(--border);
+  border-radius: .75rem; padding: 1rem;
+  font-family: 'Cascadia Code', 'Fira Mono', monospace; font-size: .8rem;
+  color: #7dd3fc; line-height: 1.7;
+  max-height: 220px; overflow-y: auto;
+  margin-bottom: 1.5rem;
+}
+.log-box .log-time { color: #475569; margin-right: .5rem; }
+.log-box .log-err { color: var(--red); }
+
+/* ── Results ── */
+.results-section { display: none; }
+.results-section.visible { display: block; }
+
+.section-title {
+  font-size: .7rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 1rem;
+}
+.output-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.output-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .875rem;
+  padding: 1.25rem;
+  display: flex; flex-direction: column; gap: .75rem;
+}
+.output-name { font-weight: 600; font-size: .9rem; }
+.output-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.btn-dl {
+  display: inline-flex; align-items: center; gap: .375rem;
+  padding: .4rem .875rem; border-radius: .5rem; font-size: .8rem; font-weight: 600;
+  text-decoration: none; cursor: pointer; border: none; transition: opacity .15s;
+}
+.btn-dl:hover { opacity: .85; }
+.btn-dl-primary { background: var(--accent); color: #fff; }
+.btn-dl-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+/* ── Review queue ── */
+.review-section { display: none; }
+.review-section.visible { display: block; }
+
+.review-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.review-count {
+  background: #f9731622; color: #f97316; border: 1px solid #f9731644;
+  border-radius: 999px; padding: .2rem .65rem; font-size: .75rem; font-weight: 700;
+}
+.review-table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: .875rem; overflow: hidden; margin-bottom: 1rem;
+  max-height: 380px; overflow-y: auto;
+}
+table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+th {
+  font-size: .7rem; color: var(--muted); text-transform: uppercase;
+  padding: .625rem .875rem; border-bottom: 1px solid var(--border);
+  text-align: left; background: var(--surface); position: sticky; top: 0;
+}
+td { padding: .625rem .875rem; border-bottom: 1px solid #0f172a; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #ffffff06; }
+.conf-pill {
+  display: inline-block; padding: .15rem .5rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 700;
+}
+.conf-low  { background: #ef444422; color: #ef4444; }
+.conf-mid  { background: #f9731622; color: #f97316; }
+select.label-select {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: .375rem;
+  padding: .3rem .5rem; font-size: .8rem; cursor: pointer;
+}
+.btn-submit-review {
+  background: var(--green); color: #fff; border: none;
+  border-radius: .75rem; padding: .75rem 1.5rem;
+  font-size: .9rem; font-weight: 700; cursor: pointer; transition: opacity .15s;
+}
+.btn-submit-review:hover { opacity: .85; }
+
+/* ── Stats banner ── */
+.stats-row {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.stat-pill {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: .375rem 1rem;
+  font-size: .8rem; color: var(--muted);
+  display: flex; align-items: center; gap: .375rem;
+}
+.stat-pill strong { color: var(--text); }
+
+/* ── Alert banner ── */
+.error-banner {
+  background: #ef444415; border: 1px solid #ef444430; border-radius: .75rem;
+  padding: 1rem 1.25rem; color: #f87171; font-size: .875rem;
+  margin-bottom: 1.5rem; display: none;
+}
+.error-banner.visible { display: block; }
+
+/* ── Report viewer ── */
+.report-viewer { display: none; margin-bottom: 2rem; }
+.report-viewer.visible { display: block; }
+.tabs-bar { display: flex; gap: .5rem; margin-bottom: 0; }
+.tab-btn {
+  padding: .6rem 1.25rem; border-radius: .75rem .75rem 0 0;
+  border: 1px solid var(--border); border-bottom: none;
+  background: var(--surface2); color: var(--muted);
+  font-size: .85rem; font-weight: 600; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.tab-btn.active { background: var(--surface); color: var(--text); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.iframe-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 .75rem .75rem .75rem; overflow: hidden;
+}
+.iframe-wrap iframe {
+  width: 100%; height: 720px; border: none; display: block;
+}
+
+/* ── Chat assistant ── */
+.chat-section { display: none; margin-top: 2rem; }
+.chat-section.visible { display: block; }
+.chat-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.chat-history {
+  padding: 1rem;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+  min-height: 120px;
+}
+.chat-welcome {
+  background: var(--surface2);
+  border-radius: .75rem;
+  padding: .875rem 1rem;
+  font-size: .875rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.6;
+}
+.chat-msg {
+  max-width: 80%;
+  border-radius: .75rem;
+  padding: .625rem 1rem;
+  font-size: .875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-user      { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: .25rem; }
+.chat-assistant { background: var(--surface2); color: var(--text); align-self: flex-start; border-bottom-left-radius: .25rem; }
+.chat-loading   { opacity: .65; animation: pulse-chat 1.2s ease-in-out infinite; }
+@keyframes pulse-chat { 0%,100%{opacity:.4} 50%{opacity:.9} }
+.chat-input-row {
+  display: flex; gap: .625rem;
+  padding: .875rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+.chat-input-row input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  padding: .5rem .875rem;
+  color: var(--text);
+  font-size: .875rem;
+  outline: none;
+  font-family: inherit;
+}
+.chat-input-row input:focus { border-color: var(--accent); }
+.btn-chat-send {
+  background: var(--accent); color: #fff;
+  border: none; border-radius: .5rem;
+  padding: .5rem 1.25rem;
+  font-size: .875rem; font-weight: 600;
+  cursor: pointer; transition: opacity .15s;
+  white-space: nowrap;
+}
+.btn-chat-send:hover { opacity: .85; }
+.btn-chat-send:disabled { opacity: .4; cursor: not-allowed; }
+
+@media(max-width: 640px) {
+  .upload-grid { grid-template-columns: 1fr; }
+  .topbar { padding: 1rem; }
+  .main { padding: 1rem; }
+  .iframe-wrap iframe { height: 520px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-logo">CSAT <span>Agent</span></div>
+    <div class="topbar-sub">Chatbot Analysis Pipeline</div>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-version">v1.0 · ZaloPay</div>
+</div>
+
+<div class="main">
+
+  <!-- Upload -->
+  <div style="margin-bottom:.5rem;margin-top:1.5rem">
+    <div class="section-title">Bước 1 — Upload file</div>
+  </div>
+  <div class="upload-grid">
+    <div class="dropzone" id="dz-csat">
+      <input type="file" id="inp-csat" accept=".xlsx,.xls,.csv,.xls" onchange="handleFile(this,'csat')">
+      <div class="dropzone-icon">📋</div>
+      <div style="margin-bottom:.375rem"><span class="dropzone-badge badge-required">Bắt buộc</span></div>
+      <div class="dropzone-label">CSAT File</div>
+      <div class="dropzone-hint">csat_YYYYMMDD.xlsx · chứa cột "User gợi ý"</div>
+      <div class="file-name" id="fn-csat"></div>
+    </div>
+    <div class="dropzone" id="dz-ticket">
+      <input type="file" id="inp-ticket" accept=".xlsx,.xls,.csv" onchange="handleFile(this,'ticket')">
+      <div class="dropzone-icon">🎫</div>
+      <div style="margin-bottom:.375rem"><span class="dropzone-badge badge-optional">Tuỳ chọn</span></div>
+      <div class="dropzone-label">Freshdesk Ticket File</div>
+      <div class="dropzone-hint">ce_chat_bot*.xlsx · dùng cho B6 đối chiếu</div>
+      <div class="file-name" id="fn-ticket"></div>
+    </div>
+  </div>
+
+  <!-- Freshdesk default file -->
+  <div style="margin-bottom:.5rem;margin-top:1.75rem">
+    <div class="section-title">Bước 1b — Freshdesk Data (lưu mặc định)</div>
+  </div>
+  <div id="fd-panel" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.25rem 1.5rem;margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div id="fd-status-text" style="font-size:.875rem;color:var(--muted)">Đang kiểm tra...</div>
+        <div id="fd-meta" style="font-size:.75rem;color:var(--muted);margin-top:.25rem;display:none"></div>
+      </div>
+      <label style="display:inline-flex;align-items:center;gap:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:.625rem;padding:.5rem 1rem;cursor:pointer;font-size:.85rem;font-weight:600;transition:border-color .2s" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <input type="file" id="inp-fd-update" accept=".xlsx,.xls" style="display:none" onchange="uploadFreshdesk(this)">
+        📤 Update file Freshdesk
+      </label>
+      <div id="fd-uploading" style="display:none;font-size:.8rem;color:var(--accent)">⟳ Đang upload...</div>
+    </div>
+    <div id="fd-alert" style="display:none;margin-top:.75rem;padding:.5rem .875rem;border-radius:.5rem;font-size:.8rem"></div>
+  </div>
+
+  <!-- Run -->
+  <div class="run-row">
+    <button class="btn-run" id="btn-run" disabled onclick="startPipeline()">
+      <div class="spinner"></div>
+      <span class="btn-label">▶ Chạy Pipeline</span>
+    </button>
+    <div style="font-size:.8rem;color:var(--muted)" id="run-hint">Upload file CSAT để bắt đầu</div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- Progress -->
+  <div class="progress-section" id="progress-section">
+    <div class="section-title">Tiến trình</div>
+    <div class="steps-bar">
+      <div class="step pending" id="step-B2">
+        <div class="step-circle">B2</div>
+        <div class="step-label">Clean</div>
+      </div>
+      <div class="step pending" id="step-B3">
+        <div class="step-circle">B3</div>
+        <div class="step-label">Filter</div>
+      </div>
+      <div class="step pending" id="step-B4">
+        <div class="step-circle">B4</div>
+        <div class="step-label">AI Classify</div>
+      </div>
+      <div class="step pending" id="step-B5">
+        <div class="step-circle">B5</div>
+        <div class="step-label">Report</div>
+      </div>
+      <div class="step pending" id="step-B6">
+        <div class="step-circle">B6</div>
+        <div class="step-label">Ticket</div>
+      </div>
+    </div>
+    <div class="log-box" id="log-box"></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row" style="display:none"></div>
+
+  <!-- Results -->
+  <div class="results-section" id="results-section">
+    <div class="section-title">Kết quả — Download</div>
+    <div class="output-grid" id="output-grid"></div>
+  </div>
+
+  <!-- Report Viewer -->
+  <div class="report-viewer" id="report-viewer">
+    <div class="tabs-bar" id="tabs-bar"></div>
+    <div class="iframe-wrap" id="iframe-wrap"></div>
+  </div>
+
+  <!-- Chat Assistant -->
+  <div class="chat-section" id="chat-section">
+    <div class="section-title">💬 AI Assistant — Hỏi về báo cáo</div>
+    <div class="chat-container">
+      <div class="chat-history" id="chat-history">
+        <div class="chat-welcome">
+          Tôi đã phân tích báo cáo và sẵn sàng trả lời câu hỏi.<br>
+          <span style="font-size:.8rem">Ví dụ: "Nhóm nào có nhiều vấn đề nhất?" · "Nguyên nhân chính là gì?" · "Tuần nào có negative rate cao?"</span>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Hỏi về báo cáo..."
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}">
+        <button class="btn-chat-send" id="btn-chat-send" onclick="sendChat()">Gửi →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review Queue -->
+  <div class="review-section" id="review-section">
+    <div class="review-header">
+      <div class="section-title" style="margin-bottom:0">Human Review Queue</div>
+      <span class="review-count" id="review-count">0 dòng</span>
+    </div>
+    <div class="review-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Feedback text</th>
+            <th>AI Label</th>
+            <th>Conf.</th>
+            <th>Correct Label</th>
+          </tr>
+        </thead>
+        <tbody id="review-tbody"></tbody>
+      </table>
+    </div>
+    <button class="btn-submit-review" onclick="submitReview()">✅ Lưu corrections vào learning loop</button>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+const LABELS = [
+  "Hoàn tiền","Tự động trừ tiền","Nạp tiền / Gói data","Chưa nhận dịch vụ","Chuyển khoản lỗi",
+  "Khó kết nối nhân viên","Phản hồi chậm / Chưa xử lý","Bot không giải quyết",
+  "Xác thực / eKYC","Vay tiền / Ví trả sau","Bảo mật / Tài khoản","Hủy dịch vụ",
+  "Thay đổi thông tin","Tiết kiệm / Sinh lời","Ưu đãi / Voucher","Tính năng app lỗi",
+  "Feedback tiêu cực","Chửi bới","Khác / Vô nghĩa","Khác / Vấn đề khác"
+];
+
+let currentJobId = null;
+let pollTimer = null;
+let reviewItems = [];
+let chatHistory = [];
+
+// ── Freshdesk default file ────────────────────────────────────────────────────
+async function loadFreshdeskStatus() {
+  try {
+    const resp = await fetch('/api/freshdesk-status');
+    const data = await resp.json();
+    const statusEl = document.getElementById('fd-status-text');
+    const metaEl   = document.getElementById('fd-meta');
+    if (data.exists) {
+      statusEl.innerHTML = `<span style="color:var(--green);font-weight:700">✓ File đã lưu:</span> ${escHtml(data.filename)}`;
+      metaEl.textContent = `${data.size_kb} KB · Cập nhật lúc ${data.updated_at} · B6 sẽ tự dùng file này khi không upload mới`;
+      metaEl.style.display = 'block';
+    } else {
+      statusEl.textContent = 'Chưa có file Freshdesk mặc định — B6 sẽ bị bỏ qua nếu không upload khi chạy.';
+    }
+  } catch { /* ignore */ }
+}
+
+async function uploadFreshdesk(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const uploadingEl = document.getElementById('fd-uploading');
+  const alertEl     = document.getElementById('fd-alert');
+  uploadingEl.style.display = 'inline-block';
+  alertEl.style.display = 'none';
+  input.value = '';
+  try {
+    const fd = new FormData();
+    fd.append('freshdesk_file', file);
+    const resp = await fetch('/api/update-freshdesk', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Upload thất bại');
+    alertEl.style.cssText = 'display:block;background:#22c55e15;border:1px solid #22c55e44;color:#4ade80';
+    alertEl.textContent = `✅ Đã lưu "${data.filename}" (${data.size_kb} KB) — B6 sẽ dùng file này cho các lần chạy tiếp theo.`;
+    await loadFreshdeskStatus();
+  } catch (err) {
+    alertEl.style.cssText = 'display:block;background:#ef444415;border:1px solid #ef444430;color:#f87171';
+    alertEl.textContent = '❌ ' + err.message;
+  } finally {
+    uploadingEl.style.display = 'none';
+  }
+}
+
+loadFreshdeskStatus();
+
+function handleFile(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  const dz = document.getElementById(`dz-${type}`);
+  const fn = document.getElementById(`fn-${type}`);
+  dz.classList.add('has-file');
+  fn.textContent = '✓ ' + file.name;
+  fn.classList.add('visible');
+  if (type === 'csat') {
+    document.getElementById('btn-run').disabled = false;
+    document.getElementById('run-hint').textContent = 'Sẵn sàng chạy pipeline';
+  }
+}
+
+// Drag & drop
+['csat','ticket'].forEach(type => {
+  const dz = document.getElementById(`dz-${type}`);
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const inp = document.getElementById(`inp-${type}`);
+    inp.files = e.dataTransfer.files;
+    handleFile(inp, type);
+  });
+});
+
+async function startPipeline() {
+  const csatInput  = document.getElementById('inp-csat');
+  const ticketInput = document.getElementById('inp-ticket');
+  if (!csatInput.files[0]) return;
+
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('run-hint').textContent = 'Đang upload và khởi động...';
+
+  // Hide previous results
+  document.getElementById('results-section').classList.remove('visible');
+  document.getElementById('review-section').classList.remove('visible');
+  document.getElementById('chat-section').classList.remove('visible');
+  document.getElementById('error-banner').classList.remove('visible');
+  document.getElementById('stats-row').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('output-grid').innerHTML = '';
+  chatHistory = [];
+  document.getElementById('chat-history').innerHTML =
+    '<div class="chat-welcome">Tôi đã phân tích báo cáo và sẵn sàng trả lời câu hỏi.<br>' +
+    '<span style="font-size:.8rem">Ví dụ: "Nhóm nào có nhiều vấn đề nhất?" · "Nguyên nhân chính là gì?"</span></div>';
+
+  // Reset steps
+  ['B2','B3','B4','B5','B6'].forEach(s => setStep(s, 'pending'));
+
+  const fd = new FormData();
+  fd.append('csat_file', csatInput.files[0]);
+  if (ticketInput.files[0]) fd.append('ticket_file', ticketInput.files[0]);
+
+  try {
+    const resp = await fetch('/api/run', { method: 'POST', body: fd });
+    if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+    const data = await resp.json();
+    currentJobId = data.job_id;
+    document.getElementById('run-hint').textContent = `Job ${currentJobId} đang chạy...`;
+
+    document.getElementById('progress-section').classList.add('visible');
+    pollTimer = setInterval(pollStatus, 1200);
+  } catch (err) {
+    showError(err.message);
+    resetBtn();
+  }
+}
+
+async function pollStatus() {
+  if (!currentJobId) return;
+  try {
+    const resp = await fetch(`/api/status/${currentJobId}`);
+    const job = await resp.json();
+    renderProgress(job);
+
+    if (job.status === 'done' || job.status === 'error') {
+      clearInterval(pollTimer);
+      resetBtn();
+      if (job.status === 'done') {
+        renderResults(job);
+        renderStats(job.stats || {});
+        if (job.review_queue && job.review_queue.length) renderReview(job.review_queue);
+      } else {
+        showError(job.errors.join('\n'));
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderProgress(job) {
+  // Steps
+  for (const [step, status] of Object.entries(job.steps || {})) {
+    if (status === 'done') setStep(step, 'done');
+    else if (status === 'skipped') setStep(step, 'skipped');
+    else if (status !== 'pending' && job.status !== 'error') setStep(step, 'running');
+  }
+  if (job.status === 'error') {
+    for (const [step, status] of Object.entries(job.steps || {})) {
+      if (status !== 'done' && status !== 'skipped') setStep(step, 'pending');
+    }
+  }
+
+  // Log
+  const logBox = document.getElementById('log-box');
+  const lines = (job.progress || []).slice(-80);
+  logBox.innerHTML = lines.map(l => {
+    const cls = l.msg.includes('❌') ? ' log-err' : '';
+    return `<div class="${cls}"><span class="log-time">${l.time}</span>${escHtml(l.msg)}</div>`;
+  }).join('');
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function setStep(id, state) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  el.className = 'step ' + state;
+  const circle = el.querySelector('.step-circle');
+  if (state === 'done') circle.textContent = '✓';
+  else if (state === 'running') circle.textContent = '⟳';
+  else if (state === 'error') circle.textContent = '✗';
+  else circle.textContent = id;
+}
+
+function renderStats(stats) {
+  const row = document.getElementById('stats-row');
+  const pills = [];
+  if (stats.total_rows) pills.push(`<span class="stat-pill">📄 Tổng dòng <strong>${stats.total_rows.toLocaleString()}</strong></span>`);
+  if (stats.negative_rows) pills.push(`<span class="stat-pill">⭐ Negative <strong>${stats.negative_rows.toLocaleString()}</strong></span>`);
+  if (stats.review_count !== undefined) pills.push(`<span class="stat-pill">🔍 Cần review <strong>${stats.review_count.toLocaleString()}</strong></span>`);
+  if (pills.length) { row.innerHTML = pills.join(''); row.style.display = 'flex'; }
+}
+
+function renderResults(job) {
+  const grid = document.getElementById('output-grid');
+  grid.innerHTML = '';
+  (job.outputs || []).forEach(out => {
+    const isHtml = out.type === 'html';
+    const card = document.createElement('div');
+    card.className = 'output-card';
+    card.innerHTML = `
+      <div class="output-name">${escHtml(out.name)}</div>
+      <div class="output-actions">
+        ${isHtml ? `<a class="btn-dl btn-dl-ghost" href="/output/${encodeURIComponent(out.file)}" target="_blank">🔗 Mở tab mới</a>` : ''}
+        <a class="btn-dl btn-dl-primary" href="/api/download/${encodeURIComponent(out.file)}" download>⬇ Download</a>
+      </div>`;
+    grid.appendChild(card);
+  });
+  document.getElementById('results-section').classList.add('visible');
+  document.getElementById('chat-section').classList.add('visible');
+
+  // Build inline report tabs from HTML outputs
+  const htmlOuts = (job.outputs || []).filter(o => o.type === 'html');
+  if (htmlOuts.length) renderReportTabs(htmlOuts);
+}
+
+function renderReportTabs(htmlOuts) {
+  const viewer  = document.getElementById('report-viewer');
+  const tabsBar = document.getElementById('tabs-bar');
+  const wrap    = document.getElementById('iframe-wrap');
+  tabsBar.innerHTML = '';
+  wrap.innerHTML    = '';
+
+  htmlOuts.forEach((out, i) => {
+    // Tab button
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = out.name;
+    btn.onclick = () => switchTab(i, htmlOuts);
+    tabsBar.appendChild(btn);
+
+    // Iframe (hidden except first)
+    const frame = document.createElement('iframe');
+    frame.id  = `iframe-${i}`;
+    frame.src = `/output/${encodeURIComponent(out.file)}`;
+    frame.style.display = i === 0 ? 'block' : 'none';
+    wrap.appendChild(frame);
+  });
+
+  viewer.classList.add('visible');
+  viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function switchTab(idx, htmlOuts) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  htmlOuts.forEach((_, i) => {
+    const f = document.getElementById(`iframe-${i}`);
+    if (f) f.style.display = i === idx ? 'block' : 'none';
+  });
+}
+
+function renderReview(queue) {
+  reviewItems = queue;
+  document.getElementById('review-count').textContent = `${queue.length} dòng`;
+  const tbody = document.getElementById('review-tbody');
+  tbody.innerHTML = queue.slice(0, 200).map((item, i) => {
+    const conf = item.confidence;
+    const confClass = conf < 0.4 ? 'conf-low' : 'conf-mid';
+    const opts = LABELS.map(l =>
+      `<option value="${escHtml(l)}" ${l === item.predicted_label ? 'selected' : ''}>${escHtml(l)}</option>`
+    ).join('');
+    return `<tr>
+      <td style="color:var(--muted);font-size:.75rem">${i+1}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(item.text)}">${escHtml(item.text)}</td>
+      <td><span style="font-size:.8rem">${escHtml(item.predicted_label||'')}</span></td>
+      <td><span class="conf-pill ${confClass}">${(conf*100).toFixed(0)}%</span></td>
+      <td><select class="label-select" data-idx="${i}">${opts}</select></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('review-section').classList.add('visible');
+}
+
+async function submitReview() {
+  const selects = document.querySelectorAll('#review-tbody .label-select');
+  const corrections = [];
+  selects.forEach(sel => {
+    const idx = parseInt(sel.dataset.idx);
+    const item = reviewItems[idx];
+    if (item && sel.value !== item.predicted_label) {
+      corrections.push({ text: item.text, label: sel.value });
+    }
+  });
+  if (!corrections.length) {
+    alert('Không có thay đổi nào để lưu.');
+    return;
+  }
+  const resp = await fetch('/api/review/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ corrections }),
+  });
+  const data = await resp.json();
+  alert(`✅ Đã lưu ${data.saved} corrections vào few_shot_examples.json.\nLần chạy tiếp theo LLM sẽ tự học từ dữ liệu này.`);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = '❌ ' + msg;
+  el.classList.add('visible');
+}
+
+function resetBtn() {
+  const btn = document.getElementById('btn-run');
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  document.getElementById('run-hint').textContent = '';
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Chat assistant ─────────────────────────────────────────────────────────────
+async function sendChat() {
+  const input   = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('btn-chat-send');
+  const msg = input.value.trim();
+  if (!msg || !currentJobId) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+  appendChatMsg('user', msg);
+  chatHistory.push({ role: 'user', content: msg });
+
+  const loadingEl = appendChatMsg('assistant', '⟳ Đang phân tích...', 'loading');
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: currentJobId,
+        message: msg,
+        history: chatHistory.slice(-8, -1),
+      }),
+    });
+    const data = await resp.json();
+    loadingEl.remove();
+    const reply = data.reply || 'Không có phản hồi.';
+    appendChatMsg('assistant', reply);
+    chatHistory.push({ role: 'assistant', content: reply });
+  } catch {
+    loadingEl.remove();
+    appendChatMsg('assistant', 'Xin lỗi, không thể kết nối AI lúc này.');
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function appendChatMsg(role, text, extraCls = '') {
+  const history = document.getElementById('chat-history');
+  const div = document.createElement('div');
+  div.className = ['chat-msg', `chat-${role}`, extraCls].filter(Boolean).join(' ');
+  div.textContent = text;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+  return div;
+}
+</script>
+</body>
+</html>

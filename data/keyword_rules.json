@@ -1,0 +1,72 @@
+{
+  "groups": [
+    {
+      "id": 1, "priority": 1, "label": "Hoàn tiền", "group": "GD & Tiền",
+      "keywords": ["hoàn tiền", "hoàn lại", "chưa hoàn", "muốn hoàn", "tiền hoàn", "trả lại tiền", "lấy lại tiền", "hoan tien", "hoan lai", "tra lai tien", "lay lai tien", "tien hoan"]
+    },
+    {
+      "id": 2, "priority": 2, "label": "Tự động trừ tiền", "group": "GD & Tiền",
+      "keywords": ["tự động trừ", "tự ý trừ", "tự nhiên trừ", "sao lại trừ tiền", "không có xác nhận", "tôi không mua", "apple services", "tự động gia hạn", "tu dong tru", "tu y tru", "tu nhien tru", "khong cho phep tru", "bi tru khong biet"]
+    },
+    {
+      "id": 3, "priority": 3, "label": "Nạp tiền / Gói data", "group": "GD & Tiền",
+      "keywords": ["nạp điện thoại", "gói 4g", "gói data", "nạp mạng", "không có data", "đăng ký data", "nạp game", "nap dien thoai", "goi 4g", "goi data", "nap mang", "khong co data", "dang ky data", "nap the", "nạp thẻ"]
+    },
+    {
+      "id": 4, "priority": 4, "label": "Chưa nhận dịch vụ", "group": "GD & Tiền",
+      "keywords": ["mã thẻ", "vé phim", "robux", "không nhận được mã", "mua thẻ game", "kim cương", "xu game", "chua nhan ma", "khong nhan duoc ma", "ma the game", "ve phim", "the dien thoai chua nhan", "chưa nhận được", "chua nhan duoc"]
+    },
+    {
+      "id": 5, "priority": 5, "label": "Chuyển khoản lỗi", "group": "GD & Tiền",
+      "keywords": ["người nhận chưa nhận", "tiền chưa về", "giao dịch treo", "mất tiền", "rút tiền không được", "bị trừ tiền nhưng", "giao dịch thành công nhưng", "không thanh toán được", "lỗi giao dịch", "tien chua ve", "giao dich treo", "mat tien", "rut tien khong duoc", "loi giao dich", "thanh toán không thành công", "chuyển tiền lỗi", "chuyen khoan loi"]
+    },
+    {
+      "id": 6, "priority": 6, "label": "Khó kết nối nhân viên", "group": "CSKH",
+      "keywords": ["nhân viên", "tổng đài", "hotline", "cần người thật", "gọi không được", "không gặp được nhân viên", "không liên hệ được", "ko ai trả lời", "nhan vien", "tong dai", "can nguoi that", "goi khong duoc", "khong gap duoc", "khong lien he duoc", "không có người hỗ trợ", "muốn nói chuyện với người"]
+    },
+    {
+      "id": 7, "priority": 7, "label": "Phản hồi chậm / Chưa xử lý", "group": "CSKH",
+      "keywords": ["quá lâu", "chưa phản hồi", "không giải quyết được", "chưa được xử lý", "không trả lời", "mãi chưa được", "gửi nhiều lần mà chưa được", "không có kết quả", "qua lau", "chua phan hoi", "khong giai quyet duoc", "chua duoc xu ly", "khong tra loi", "mai chua duoc", "doi rat lau", "đợi rất lâu"]
+    },
+    {
+      "id": 8, "priority": 8, "label": "Bot không giải quyết", "group": "Chatbot",
+      "keywords": ["chatbot", "vòng vo", "trả lời không đúng trọng tâm", "gợi ý loanh quanh", "như robot", "lặp đi lặp lại", "trả lời chung chung", "hỏi một đằng trả lời một nẻo", "vong vo", "tra loi khong dung", "goi y loanh quanh", "nhu robot", "lap di lap lai", "tra loi chung chung", "bot vô dụng", "bot vo dung", "bot không hiểu"]
+    },
+    {
+      "id": 9, "priority": 9, "label": "Xác thực / eKYC", "group": "Tính năng",
+      "keywords": ["cccd", "căn cước", "ekyc", "sinh trắc học", "quét chip", "xác thực", "định danh", "quét khuôn mặt", "vneid", "can cuoc", "sinh trac hoc", "quet chip", "xac thuc", "dinh danh", "quet khuon mat", "xác minh danh tính", "xac minh danh tinh"]
+    },
+    {
+      "id": 10, "priority": 10, "label": "Vay tiền / Ví trả sau", "group": "Tính năng",
+      "keywords": ["vay tiền", "khoản vay", "ví trả sau", "hạn mức vay", "duyệt vay", "thanh toán dư nợ", "vay tien", "khoan vay", "vi tra sau", "han muc vay", "duyet vay", "thanh toan du no", "vay không được", "vay khong duoc"]
+    },
+    {
+      "id": 11, "priority": 11, "label": "Bảo mật / Tài khoản", "group": "Tính năng",
+      "keywords": ["khóa tài khoản", "hack", "lừa đảo", "quên mật khẩu", "tài khoản bị khóa", "mất tài khoản", "xóa tài khoản", "khoa tai khoan", "lua dao", "quen mat khau", "tai khoan bi khoa", "mat tai khoan", "xoa tai khoan", "bị hack", "bi hack", "đổi mật khẩu", "doi mat khau"]
+    },
+    {
+      "id": 12, "priority": 12, "label": "Hủy dịch vụ", "group": "Tính năng",
+      "keywords": ["muốn hủy", "không hủy được", "hủy vé", "hủy dịch vụ", "không có tính năng hủy", "hủy đăng ký", "muon huy", "khong huy duoc", "huy ve", "huy dich vu", "khong co tinh nang huy", "huy dang ky", "huy don hang", "hủy đơn"]
+    },
+    {
+      "id": 13, "priority": 13, "label": "Thay đổi thông tin", "group": "Tính năng",
+      "keywords": ["đổi số điện thoại", "thay sđt", "đổi email", "thay đổi thông tin", "sai email", "doi so dien thoai", "thay sdt", "doi email", "thay doi thong tin", "cập nhật thông tin", "cap nhat thong tin"]
+    },
+    {
+      "id": 14, "priority": 14, "label": "Tiết kiệm / Sinh lời", "group": "Tính năng",
+      "keywords": ["tiết kiệm", "sinh lời", "số dư sinh lời", "lãi suất", "rút tiết kiệm", "thanh lý số dư", "tiet kiem", "sinh loi", "so du sinh loi", "lai suat", "rut tiet kiem", "thanh ly so du", "gửi tiết kiệm", "gui tiet kiem"]
+    },
+    {
+      "id": 15, "priority": 15, "label": "Ưu đãi / Voucher", "group": "Tính năng",
+      "keywords": ["voucher", "khuyến mãi", "mã giảm", "cashback", "xu thưởng", "khuyen mai", "ma giam", "xu thuong", "không áp được voucher", "khong ap duoc voucher", "ưu đãi không áp dụng được", "uu dai khong ap dung duoc", "coupon"]
+    },
+    {
+      "id": 16, "priority": 16, "label": "Tính năng app lỗi", "group": "Tính năng",
+      "keywords": ["app lỗi", "đăng nhập lỗi", "không quét qr được", "app lag", "không liên kết ngân hàng", "app loi", "dang nhap loi", "khong quet qr duoc", "khong lien ket ngan hang", "app bị lỗi", "app bi loi", "load mãi", "load mai", "không mở được app"]
+    },
+    {
+      "id": 17, "priority": 17, "label": "Feedback tiêu cực", "group": "Feedback",
+      "keywords": ["tệ", "dở", "thất vọng", "không hài lòng", "xóa app", "không bao giờ dùng nữa", "quá tệ", "te qua", "that vong", "khong hai long", "xoa app", "khong bao gio dung nua", "chán quá", "chan qua", "dịch vụ tệ", "dich vu te"]
+    }
+  ]
+}
