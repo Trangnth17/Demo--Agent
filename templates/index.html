@@ -539,6 +539,18 @@ select.label-select {
 </div><!-- /main -->
 
 <script>
+// Guard: must be served over HTTP, not opened as a local file
+if (window.location.protocol === 'file:') {
+  document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0f172a;color:#e2e8f0;flex-direction:column;gap:20px;padding:2rem;text-align:center;font-family:system-ui">
+    <div style="font-size:2rem">⚠️</div>
+    <div style="font-size:1.25rem;font-weight:700;color:#ef4444">Không thể mở file trực tiếp</div>
+    <div style="max-width:480px;color:#94a3b8">Ứng dụng này cần chạy qua HTTP server. Hãy khởi động server trước:</div>
+    <code style="background:#1e293b;border:1px solid #334155;padding:.75rem 1.5rem;border-radius:.625rem;font-size:.9rem;color:#6366f1">python -m uvicorn main:app --host 0.0.0.0 --port 8000</code>
+    <div style="color:#94a3b8">Sau đó truy cập: <a href="http://localhost:8000" style="color:#6366f1;font-weight:600">http://localhost:8000</a></div>
+  </div>`;
+  throw new Error('file:// protocol not supported — start the server first');
+}
+
 const LABELS = [
   "Hoàn tiền","Tự động trừ tiền","Nạp tiền / Gói data","Chưa nhận dịch vụ","Chuyển khoản lỗi",
   "Khó kết nối nhân viên","Phản hồi chậm / Chưa xử lý","Bot không giải quyết",
@@ -551,6 +563,7 @@ let currentJobId = null;
 let pollTimer = null;
 let reviewItems = [];
 let chatHistory = [];
+const droppedFiles = {};
 
 // ── Freshdesk default file ────────────────────────────────────────────────────
 async function loadFreshdeskStatus() {
@@ -618,9 +631,10 @@ function handleFile(input, type) {
   dz.addEventListener('drop', e => {
     e.preventDefault();
     dz.classList.remove('drag-over');
-    const inp = document.getElementById(`inp-${type}`);
-    inp.files = e.dataTransfer.files;
-    handleFile(inp, type);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    droppedFiles[type] = file;
+    handleFile({ files: { 0: file, length: 1 } }, type);
   });
 });
 
@@ -638,7 +652,10 @@ async function startPipeline() {
   const csatInput   = document.getElementById('inp-csat');
   const ticketInput = document.getElementById('inp-ticket');
   const clickInput  = document.getElementById('inp-click');
-  if (!csatInput.files[0]) return;
+  const csatFile   = csatInput.files[0]   || droppedFiles['csat'];
+  const ticketFile = ticketInput.files[0] || droppedFiles['ticket'];
+  const clickFile  = clickInput.files[0]  || droppedFiles['click'];
+  if (!csatFile) return;
 
   const btn = document.getElementById('btn-run');
   btn.disabled = true;
@@ -664,9 +681,9 @@ async function startPipeline() {
   const reportType = document.querySelector('input[name="report-type"]:checked')?.value || 'weekly';
 
   const fd = new FormData();
-  fd.append('csat_file', csatInput.files[0]);
-  if (ticketInput.files[0]) fd.append('ticket_file', ticketInput.files[0]);
-  if (clickInput.files[0])  fd.append('click_source_file', clickInput.files[0]);
+  fd.append('csat_file', csatFile);
+  if (ticketFile) fd.append('ticket_file', ticketFile);
+  if (clickFile)  fd.append('click_source_file', clickFile);
   fd.append('report_type', reportType);
 
   try {
