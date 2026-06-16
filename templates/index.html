@@ -52,9 +52,12 @@ body {
 /* ── Upload section ── */
 .upload-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 1.25rem;
   margin-bottom: 1.5rem;
+}
+@media(max-width: 860px) {
+  .upload-grid { grid-template-columns: 1fr 1fr; }
 }
 .dropzone {
   background: var(--surface);
@@ -385,6 +388,14 @@ select.label-select {
       <div class="dropzone-hint">ce_chat_bot*.xlsx · dùng cho B6 đối chiếu</div>
       <div class="file-name" id="fn-ticket"></div>
     </div>
+    <div class="dropzone" id="dz-click">
+      <input type="file" id="inp-click" accept=".xlsx,.xls,.csv" onchange="handleFile(this,'click')">
+      <div class="dropzone-icon">📈</div>
+      <div style="margin-bottom:.375rem"><span class="dropzone-badge badge-optional">Tuỳ chọn</span></div>
+      <div class="dropzone-label">Click Source - Category</div>
+      <div class="dropzone-hint">Data click theo category từ Chatbot</div>
+      <div class="file-name" id="fn-click"></div>
+    </div>
   </div>
 
   <!-- Freshdesk default file -->
@@ -406,6 +417,21 @@ select.label-select {
     <div id="fd-alert" style="display:none;margin-top:.75rem;padding:.5rem .875rem;border-radius:.5rem;font-size:.8rem"></div>
   </div>
 
+  <!-- Report type selector -->
+  <div style="margin-bottom:1rem">
+    <div class="section-title">Bước 2 — Chọn loại báo cáo</div>
+    <div style="display:flex;gap:1.5rem;margin-top:.75rem;flex-wrap:wrap">
+      <label style="cursor:pointer;display:flex;align-items:center;gap:.5rem;background:var(--surface);border:1px solid var(--border);border-radius:.625rem;padding:.625rem 1.125rem;font-size:.875rem;font-weight:600;transition:border-color .2s,background .2s" id="rt-label-weekly">
+        <input type="radio" name="report-type" value="weekly" id="rt-weekly" checked style="accent-color:var(--accent)">
+        📅 Báo cáo tuần <span style="font-size:.75rem;color:var(--muted);font-weight:400;margin-left:.25rem">(4 tuần gần nhất)</span>
+      </label>
+      <label style="cursor:pointer;display:flex;align-items:center;gap:.5rem;background:var(--surface);border:1px solid var(--border);border-radius:.625rem;padding:.625rem 1.125rem;font-size:.875rem;font-weight:600;transition:border-color .2s,background .2s" id="rt-label-monthly">
+        <input type="radio" name="report-type" value="monthly" id="rt-monthly" style="accent-color:var(--accent)">
+        📆 Báo cáo tháng <span style="font-size:.75rem;color:var(--muted);font-weight:400;margin-left:.25rem">(4 tháng gần nhất)</span>
+      </label>
+    </div>
+  </div>
+
   <!-- Run -->
   <div class="run-row">
     <button class="btn-run" id="btn-run" disabled onclick="startPipeline()">
@@ -422,6 +448,14 @@ select.label-select {
   <div class="progress-section" id="progress-section">
     <div class="section-title">Tiến trình</div>
     <div class="steps-bar">
+      <div class="step pending" id="step-B0">
+        <div class="step-circle">B0</div>
+        <div class="step-label">Click Src</div>
+      </div>
+      <div class="step pending" id="step-B1">
+        <div class="step-circle">B1</div>
+        <div class="step-label">Validate</div>
+      </div>
       <div class="step pending" id="step-B2">
         <div class="step-circle">B2</div>
         <div class="step-label">Clean</div>
@@ -577,7 +611,7 @@ function handleFile(input, type) {
 }
 
 // Drag & drop
-['csat','ticket'].forEach(type => {
+['csat','ticket','click'].forEach(type => {
   const dz = document.getElementById(`dz-${type}`);
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
@@ -590,9 +624,20 @@ function handleFile(input, type) {
   });
 });
 
+// Report-type label highlight
+document.querySelectorAll('input[name="report-type"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.getElementById('rt-label-weekly').style.borderColor =
+      document.getElementById('rt-weekly').checked ? 'var(--accent)' : 'var(--border)';
+    document.getElementById('rt-label-monthly').style.borderColor =
+      document.getElementById('rt-monthly').checked ? 'var(--accent)' : 'var(--border)';
+  });
+});
+
 async function startPipeline() {
-  const csatInput  = document.getElementById('inp-csat');
+  const csatInput   = document.getElementById('inp-csat');
   const ticketInput = document.getElementById('inp-ticket');
+  const clickInput  = document.getElementById('inp-click');
   if (!csatInput.files[0]) return;
 
   const btn = document.getElementById('btn-run');
@@ -614,11 +659,15 @@ async function startPipeline() {
     '<span style="font-size:.8rem">Ví dụ: "Nhóm nào có nhiều vấn đề nhất?" · "Nguyên nhân chính là gì?"</span></div>';
 
   // Reset steps
-  ['B2','B3','B4','B5','B6'].forEach(s => setStep(s, 'pending'));
+  ['B0','B1','B2','B3','B4','B5','B6'].forEach(s => setStep(s, 'pending'));
+
+  const reportType = document.querySelector('input[name="report-type"]:checked')?.value || 'weekly';
 
   const fd = new FormData();
   fd.append('csat_file', csatInput.files[0]);
   if (ticketInput.files[0]) fd.append('ticket_file', ticketInput.files[0]);
+  if (clickInput.files[0])  fd.append('click_source_file', clickInput.files[0]);
+  fd.append('report_type', reportType);
 
   try {
     const resp = await fetch('/api/run', { method: 'POST', body: fd });

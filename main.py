@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -26,6 +26,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 import sys
 sys.path.insert(0, str(BASE_DIR))
 
+from pipeline.b0_click_source import analyze_click_source
 from pipeline.b1_validate import validate_and_read, extract_period
 from pipeline.b2_clean import clean_data
 from pipeline.b3_filter import filter_negative
@@ -63,8 +64,10 @@ async def index():
 @app.post("/api/run-local")
 async def run_pipeline_local(background_tasks: BackgroundTasks, data: dict):
     """Run pipeline using files already present in BASE_DIR (no upload needed)."""
-    csat_name   = data.get("csat_file", "")
-    ticket_name = data.get("ticket_file", "")
+    csat_name         = data.get("csat_file", "")
+    ticket_name       = data.get("ticket_file", "")
+    click_source_name = data.get("click_source_name", "")
+    report_type       = data.get("report_type", "weekly")
 
     if not csat_name:
         raise HTTPException(400, "csat_file required")
@@ -93,10 +96,19 @@ async def run_pipeline_local(background_tasks: BackgroundTasks, data: dict):
         ticket_path = FRESHDESK_DEFAULT_PATH
         freshdesk_source = "default"
 
+    click_source_path = None
+    if click_source_name:
+        click_src = BASE_DIR / click_source_name
+        if not click_src.exists():
+            raise HTTPException(404, f"File not found: {click_source_name}")
+        click_source_path = UPLOAD_DIR / f"{job_id}_click{click_src.suffix}"
+        shutil.copy2(click_src, click_source_path)
+
     jobs[job_id] = {
         "status": "running",
         "period": period,
         "steps": {
+            "B0": "pending" if click_source_path else "skipped",
             "B1": "pending", "B2": "pending", "B3": "pending",
             "B4": "pending", "B5": "pending",
             "B6": "pending" if ticket_path else "skipped",
@@ -108,7 +120,7 @@ async def run_pipeline_local(background_tasks: BackgroundTasks, data: dict):
         "stats": {},
     }
 
-    background_tasks.add_task(_run_pipeline, job_id, csat_path, ticket_path, period, freshdesk_source)
+    background_tasks.add_task(_run_pipeline, job_id, csat_path, ticket_path, period, freshdesk_source, click_source_path, report_type)
     return {"job_id": job_id, "period": period, "csat_file": csat_name}
 
 
@@ -128,6 +140,8 @@ async def run_pipeline(
     background_tasks: BackgroundTasks,
     csat_file: UploadFile = File(...),
     ticket_file: UploadFile = File(None),
+    click_source_file: UploadFile = File(None),
+    report_type: str = Form("weekly"),
 ):
     job_id = str(uuid.uuid4())[:8].upper()
     period = extract_period(csat_file.filename)
@@ -147,10 +161,17 @@ async def run_pipeline(
         ticket_path = FRESHDESK_DEFAULT_PATH
         freshdesk_source = "default"
 
+    click_source_path = None
+    if click_source_file and click_source_file.filename:
+        click_source_path = UPLOAD_DIR / f"{job_id}_click{Path(click_source_file.filename).suffix}"
+        with open(click_source_path, "wb") as f:
+            shutil.copyfileobj(click_source_file.file, f)
+
     jobs[job_id] = {
         "status": "running",
         "period": period,
         "steps": {
+            "B0": "pending" if click_source_path else "skipped",
             "B1": "pending", "B2": "pending", "B3": "pending",
             "B4": "pending", "B5": "pending",
             "B6": "pending" if ticket_path else "skipped",
@@ -162,7 +183,7 @@ async def run_pipeline(
         "stats": {},
     }
 
-    background_tasks.add_task(_run_pipeline, job_id, csat_path, ticket_path, period, freshdesk_source)
+    background_tasks.add_task(_run_pipeline, job_id, csat_path, ticket_path, period, freshdesk_source, click_source_path, report_type)
     return {"job_id": job_id}
 
 
@@ -285,7 +306,15 @@ async def chat_with_agent(data: dict):
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
-async def _run_pipeline(job_id: str, csat_path: Path, ticket_path: Path | None, period: str, freshdesk_source: str | None = None):
+async def _run_pipeline(
+    job_id: str,
+    csat_path: Path,
+    ticket_path: Path | None,
+    period: str,
+    freshdesk_source: str | None = None,
+    click_source_path: Path | None = None,
+    report_type: str = "weekly",
+):
     job = jobs[job_id]
 
     def log(msg: str, step: str | None = None, status: str = "running"):
@@ -295,6 +324,13 @@ async def _run_pipeline(job_id: str, csat_path: Path, ticket_path: Path | None, 
             job["steps"][step] = status
 
     try:
+        # B0 — Click Source + Ticket Volume (optional)
+        b0_html = ""
+        if click_source_path:
+            log("B0: Phân tích Click Source + Ticket Volume...", "B0")
+            b0_html = await asyncio.to_thread(analyze_click_source, click_source_path, ticket_path)
+            log("B0: ✓ Phân tích Click Source xong", "B0", "done")
+
         # B1 — Validate
         log("B1: Đọc và validate file CSAT...", "B1")
         df_raw = await asyncio.to_thread(validate_and_read, csat_path)
@@ -334,7 +370,7 @@ async def _run_pipeline(job_id: str, csat_path: Path, ticket_path: Path | None, 
 
         # B5 — HTML Report
         log("B5: Tạo báo cáo HTML...", "B5")
-        b5_path = await asyncio.to_thread(generate_csat_report, df_classified, df_clean, job_id, period)
+        b5_path = await asyncio.to_thread(generate_csat_report, df_classified, df_clean, job_id, period, report_type, b0_html)
         job["outputs"].append({"name": "📈 B5 — CSAT REPORT", "file": b5_path.name, "type": "html"})
         log(f"B5: ✓ {b5_path.name}", "B5", "done")
 

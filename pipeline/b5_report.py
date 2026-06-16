@@ -132,7 +132,7 @@ tr:last-child td{border-bottom:none}
 <body>
 <div class="report-header">
   <div>
-    <div class="report-title">CSAT Chatbot — Weekly Analysis Report</div>
+    <div class="report-title">{{REPORT_TITLE}}</div>
     <div class="report-sub">ZaloPay Customer Service · Phân tích survey 1–2 sao · <span id="wk-range-label"></span></div>
     <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
       <span class="badge badge-live"><span class="badge-dot"></span>Auto-generated</span>
@@ -146,6 +146,7 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+{{B0_HTML}}
 <div class="rating-summary" id="rating-summary"></div>
 <div class="summary-row" id="summary-cards"></div>
 
@@ -153,7 +154,7 @@ tr:last-child td{border-bottom:none}
   <div class="section-title">Group Issue</div>
   <div class="section-badge" id="group-badge"></div>
   <div class="section-line"></div>
-  <div style="font-size:11px;color:var(--text-3)">% = ticket nhóm / tổng 1–2★ tuần · Heatmap theo cột</div>
+  <div style="font-size:11px;color:var(--text-3)">% = ticket nhóm / tổng 1–2★ {{PERIOD_UNIT}} · Heatmap theo cột</div>
 </div>
 <div class="table-wrap" id="group-table"></div>
 
@@ -317,104 +318,204 @@ function heatCell(v,t,colMax){
 </html>"""
 
 
-def generate_csat_report(df_classified: pd.DataFrame, df_raw: pd.DataFrame, job_id: str, period: str = "") -> Path:
-    # Build week keys from Tuần column (ISO week - 1)
-    if "Tuần" not in df_classified.columns:
-        raise ValueError("df_classified missing 'Tuần' column (from B2 clean step)")
-
+def generate_csat_report(
+    df_classified: pd.DataFrame,
+    df_raw: pd.DataFrame,
+    job_id: str,
+    period: str = "",
+    report_type: str = "weekly",
+    b0_html: str = "",
+) -> Path:
     df = df_classified.copy()
-    df["_wk"] = df["Tuần"].astype("Int64")
-    df = df.dropna(subset=["_wk"])
 
-    all_weeks = sorted(df["_wk"].unique())
-    selected = all_weeks[-4:] if len(all_weeks) >= 4 else all_weeks
+    if report_type == "monthly":
+        # ── Monthly mode ─────────────────────────────────────────────────
+        if "Thời gian" not in df.columns:
+            raise ValueError("df_classified missing 'Thời gian' column (required for monthly mode)")
 
-    df = df[df["_wk"].isin(selected)].copy()
-    wk_keys = [f"W{int(w)}" for w in selected]
+        df["Thời gian"] = pd.to_datetime(df["Thời gian"], errors="coerce")
+        df["_period"] = df["Thời gian"].dt.to_period("M")
+        df = df.dropna(subset=["_period"])
 
-    # Week labels with start date
-    week_labels = []
-    for w, wk in zip(selected, wk_keys):
-        sub = df[df["_wk"] == w]
-        if "Thời gian" in sub.columns:
-            dates = pd.to_datetime(sub["Thời gian"], errors="coerce").dropna()
-            if len(dates):
-                week_labels.append(f"{wk}\n{dates.min().strftime('%d/%m')}")
+        all_periods = sorted(df["_period"].unique())
+        selected = all_periods[-4:] if len(all_periods) >= 4 else all_periods
+
+        df = df[df["_period"].isin(selected)].copy()
+        period_keys = [f"T{p.month}" for p in selected]
+
+        # Period labels: "T1\n01/2025"
+        period_labels = [f"{pk}\n{p.strftime('%m/%Y')}" for pk, p in zip(period_keys, selected)]
+
+        # T: total neg per period key
+        T = {period_keys[i]: int(df[df["_period"] == p].shape[0]) for i, p in enumerate(selected)}
+
+        # Rating distribution from raw (B2) data
+        RATING = {str(s): {pk: 0 for pk in period_keys} for s in [1, 2, 3, 4, 5]}
+        TOTAL_ALL = {pk: 0 for pk in period_keys}
+
+        if df_raw is not None and "Thời gian" in df_raw.columns and "Đánh giá (sao)" in df_raw.columns:
+            dr = df_raw.copy()
+            dr["Thời gian"] = pd.to_datetime(dr["Thời gian"], errors="coerce")
+            dr["Đánh giá (sao)"] = pd.to_numeric(dr["Đánh giá (sao)"], errors="coerce")
+            dr["_period"] = dr["Thời gian"].dt.to_period("M")
+            dr = dr.dropna(subset=["_period", "Đánh giá (sao)"])
+            dr = dr[dr["_period"].isin(selected)]
+            for i, p in enumerate(selected):
+                pk = period_keys[i]
+                wdf = dr[dr["_period"] == p]
+                TOTAL_ALL[pk] = len(wdf)
+                for star in [1, 2, 3, 4, 5]:
+                    RATING[str(star)][pk] = int((wdf["Đánh giá (sao)"] == star).sum())
+        else:
+            for i, p in enumerate(selected):
+                pk = period_keys[i]
+                n = T[pk]
+                TOTAL_ALL[pk] = n
+                RATING["1"][pk] = int(n * 0.78)
+                RATING["2"][pk] = n - int(n * 0.78)
+
+        # GROUPS counts
+        lbl_col = "primary_label" if "primary_label" in df.columns else None
+        groups_js = []
+        for g in GROUP_META:
+            v = {}
+            for i, p in enumerate(selected):
+                pk = period_keys[i]
+                if lbl_col:
+                    v[pk] = int(df[(df["_period"] == p) & df[lbl_col].isin(g["labels"])].shape[0])
+                else:
+                    v[pk] = 0
+            groups_js.append({"name": g["name"], "emoji": g["emoji"], "accent": g["accent"],
+                              "bg": g["bg"], "tc": g["tc"], "v": v})
+
+        # SUBS counts
+        subs_js = []
+        for sm in SUBS_META:
+            v = {}
+            for i, p in enumerate(selected):
+                pk = period_keys[i]
+                if lbl_col:
+                    v[pk] = int(df[(df["_period"] == p) & df[lbl_col].isin(sm["labels"])].shape[0])
+                else:
+                    v[pk] = 0
+            if sum(v.values()) == 0:
                 continue
-        week_labels.append(wk)
+            subs_js.append({"g": sm["g"], "s": sm["s"], "v": v, "bold": sm["bold"]})
 
-    # T: total neg per week key
-    T = {wk_keys[i]: int(df[df["_wk"] == w].shape[0]) for i, w in enumerate(selected)}
+        # Metadata
+        if "Thời gian" in df.columns:
+            dates = pd.to_datetime(df["Thời gian"], errors="coerce").dropna()
+            report_date = dates.max().strftime("%d/%m/%Y") if len(dates) else datetime.now().strftime("%d/%m/%Y")
+            period_dates = f"{dates.min().strftime('%d/%m')} – {dates.max().strftime('%d/%m/%Y')}" if len(dates) else ""
+        else:
+            report_date = datetime.now().strftime("%d/%m/%Y")
+            period_dates = ""
 
-    # Rating distribution from raw (B2) data
-    RATING = {str(s): {wk: 0 for wk in wk_keys} for s in [1, 2, 3, 4, 5]}
-    TOTAL_ALL = {wk: 0 for wk in wk_keys}
+        wk_range = f"T{selected[0].month}–T{selected[-1].month}/{selected[-1].year}"
+        meta = {"report_date": report_date, "wk_range": wk_range, "period_dates": period_dates}
+        week_labels = period_labels
+        report_title = "CSAT Chatbot — Monthly Analysis Report"
+        period_unit = "tháng"
 
-    if df_raw is not None and "Thời gian" in df_raw.columns and "Đánh giá (sao)" in df_raw.columns:
-        dr = df_raw.copy()
-        dr["Thời gian"] = pd.to_datetime(dr["Thời gian"], errors="coerce")
-        dr["Đánh giá (sao)"] = pd.to_numeric(dr["Đánh giá (sao)"], errors="coerce")
-        if "Tuần" not in dr.columns:
-            dr["Tuần"] = (dr["Thời gian"].dt.isocalendar().week.astype("Int64") - 1).where(
-                dr["Thời gian"].notna(), pd.NA)
-        dr = dr.dropna(subset=["Tuần", "Đánh giá (sao)"])
-        dr["_wk"] = dr["Tuần"].astype("Int64")
-        dr = dr[dr["_wk"].isin(selected)]
-        for i, w in enumerate(selected):
-            wk = wk_keys[i]
-            wdf = dr[dr["_wk"] == w]
-            TOTAL_ALL[wk] = len(wdf)
-            for star in [1, 2, 3, 4, 5]:
-                RATING[str(star)][wk] = int((wdf["Đánh giá (sao)"] == star).sum())
     else:
-        for i, w in enumerate(selected):
-            wk = wk_keys[i]
-            n = T[wk]
-            TOTAL_ALL[wk] = n
-            RATING["1"][wk] = int(n * 0.78)
-            RATING["2"][wk] = n - int(n * 0.78)
+        # ── Weekly mode (original logic) ─────────────────────────────────
+        if "Tuần" not in df.columns:
+            raise ValueError("df_classified missing 'Tuần' column (from B2 clean step)")
 
-    # GROUPS counts
-    lbl_col = "primary_label" if "primary_label" in df.columns else None
-    groups_js = []
-    for g in GROUP_META:
-        v = {}
-        for i, w in enumerate(selected):
-            wk = wk_keys[i]
-            if lbl_col:
-                v[wk] = int(df[(df["_wk"] == w) & df[lbl_col].isin(g["labels"])].shape[0])
-            else:
-                v[wk] = 0
-        groups_js.append({"name": g["name"], "emoji": g["emoji"], "accent": g["accent"],
-                          "bg": g["bg"], "tc": g["tc"], "v": v})
+        df["_wk"] = df["Tuần"].astype("Int64")
+        df = df.dropna(subset=["_wk"])
 
-    # SUBS counts
-    subs_js = []
-    for sm in SUBS_META:
-        v = {}
-        for i, w in enumerate(selected):
-            wk = wk_keys[i]
-            if lbl_col:
-                v[wk] = int(df[(df["_wk"] == w) & df[lbl_col].isin(sm["labels"])].shape[0])
-            else:
-                v[wk] = 0
-        if sum(v.values()) == 0:
-            continue
-        subs_js.append({"g": sm["g"], "s": sm["s"], "v": v, "bold": sm["bold"]})
+        all_weeks = sorted(df["_wk"].unique())
+        selected = all_weeks[-4:] if len(all_weeks) >= 4 else all_weeks
 
-    # Metadata
-    last_wk = selected[-1]
-    if "Thời gian" in df.columns:
-        dates = pd.to_datetime(df["Thời gian"], errors="coerce").dropna()
-        report_date = dates.max().strftime("%d/%m/%Y") if len(dates) else datetime.now().strftime("%d/%m/%Y")
-        period_dates = f"{dates.min().strftime('%d/%m')} – {dates.max().strftime('%d/%m/%Y')}" if len(dates) else ""
-    else:
-        report_date = datetime.now().strftime("%d/%m/%Y")
-        period_dates = ""
+        df = df[df["_wk"].isin(selected)].copy()
+        period_keys = [f"W{int(w)}" for w in selected]
 
-    wk_range = f"{wk_keys[0]}–{wk_keys[-1]}"
-    meta = {"report_date": report_date, "wk_range": wk_range, "period_dates": period_dates}
+        # Week labels with start date
+        week_labels = []
+        for w, pk in zip(selected, period_keys):
+            sub = df[df["_wk"] == w]
+            if "Thời gian" in sub.columns:
+                dates = pd.to_datetime(sub["Thời gian"], errors="coerce").dropna()
+                if len(dates):
+                    week_labels.append(f"{pk}\n{dates.min().strftime('%d/%m')}")
+                    continue
+            week_labels.append(pk)
 
+        # T: total neg per week key
+        T = {period_keys[i]: int(df[df["_wk"] == w].shape[0]) for i, w in enumerate(selected)}
+
+        # Rating distribution from raw (B2) data
+        RATING = {str(s): {pk: 0 for pk in period_keys} for s in [1, 2, 3, 4, 5]}
+        TOTAL_ALL = {pk: 0 for pk in period_keys}
+
+        if df_raw is not None and "Thời gian" in df_raw.columns and "Đánh giá (sao)" in df_raw.columns:
+            dr = df_raw.copy()
+            dr["Thời gian"] = pd.to_datetime(dr["Thời gian"], errors="coerce")
+            dr["Đánh giá (sao)"] = pd.to_numeric(dr["Đánh giá (sao)"], errors="coerce")
+            if "Tuần" not in dr.columns:
+                dr["Tuần"] = (dr["Thời gian"].dt.isocalendar().week.astype("Int64") - 1).where(
+                    dr["Thời gian"].notna(), pd.NA)
+            dr = dr.dropna(subset=["Tuần", "Đánh giá (sao)"])
+            dr["_wk"] = dr["Tuần"].astype("Int64")
+            dr = dr[dr["_wk"].isin(selected)]
+            for i, w in enumerate(selected):
+                pk = period_keys[i]
+                wdf = dr[dr["_wk"] == w]
+                TOTAL_ALL[pk] = len(wdf)
+                for star in [1, 2, 3, 4, 5]:
+                    RATING[str(star)][pk] = int((wdf["Đánh giá (sao)"] == star).sum())
+        else:
+            for i, w in enumerate(selected):
+                pk = period_keys[i]
+                n = T[pk]
+                TOTAL_ALL[pk] = n
+                RATING["1"][pk] = int(n * 0.78)
+                RATING["2"][pk] = n - int(n * 0.78)
+
+        # GROUPS counts
+        lbl_col = "primary_label" if "primary_label" in df.columns else None
+        groups_js = []
+        for g in GROUP_META:
+            v = {}
+            for i, w in enumerate(selected):
+                pk = period_keys[i]
+                if lbl_col:
+                    v[pk] = int(df[(df["_wk"] == w) & df[lbl_col].isin(g["labels"])].shape[0])
+                else:
+                    v[pk] = 0
+            groups_js.append({"name": g["name"], "emoji": g["emoji"], "accent": g["accent"],
+                              "bg": g["bg"], "tc": g["tc"], "v": v})
+
+        # SUBS counts
+        subs_js = []
+        for sm in SUBS_META:
+            v = {}
+            for i, w in enumerate(selected):
+                pk = period_keys[i]
+                if lbl_col:
+                    v[pk] = int(df[(df["_wk"] == w) & df[lbl_col].isin(sm["labels"])].shape[0])
+                else:
+                    v[pk] = 0
+            if sum(v.values()) == 0:
+                continue
+            subs_js.append({"g": sm["g"], "s": sm["s"], "v": v, "bold": sm["bold"]})
+
+        # Metadata
+        if "Thời gian" in df.columns:
+            dates = pd.to_datetime(df["Thời gian"], errors="coerce").dropna()
+            report_date = dates.max().strftime("%d/%m/%Y") if len(dates) else datetime.now().strftime("%d/%m/%Y")
+            period_dates = f"{dates.min().strftime('%d/%m')} – {dates.max().strftime('%d/%m/%Y')}" if len(dates) else ""
+        else:
+            report_date = datetime.now().strftime("%d/%m/%Y")
+            period_dates = ""
+
+        wk_range = f"{period_keys[0]}–{period_keys[-1]}"
+        meta = {"report_date": report_date, "wk_range": wk_range, "period_dates": period_dates}
+        report_title = "CSAT Chatbot — Weekly Analysis Report"
+        period_unit = "tuần"
+
+    # ── Render HTML ───────────────────────────────────────────────────────
     html = HTML_TEMPLATE
     html = html.replace("{{T_JSON}}", json.dumps(T, ensure_ascii=False))
     html = html.replace("{{GROUPS_JSON}}", json.dumps(groups_js, ensure_ascii=False, indent=2))
@@ -425,6 +526,9 @@ def generate_csat_report(df_classified: pd.DataFrame, df_raw: pd.DataFrame, job_
     html = html.replace("{{META_JSON}}", json.dumps(meta, ensure_ascii=False))
     html = html.replace("{{PERIOD}}", period or job_id)
     html = html.replace("{{REPORT_DATE}}", report_date)
+    html = html.replace("{{REPORT_TITLE}}", report_title)
+    html = html.replace("{{PERIOD_UNIT}}", period_unit)
+    html = html.replace("{{B0_HTML}}", b0_html)
 
     fname = f"CSAT REPORT {period}.html" if period else f"b5_report_{job_id}.html"
     out_path = OUTPUT_DIR / fname
